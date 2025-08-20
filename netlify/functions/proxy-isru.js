@@ -1,5 +1,4 @@
 const https = require('https');
-const http = require('http');
 
 exports.handler = async (event) => {
     // Enable CORS for your domain
@@ -30,28 +29,23 @@ exports.handler = async (event) => {
             };
         }
 
-        // Your Resi proxy credentials
-        const proxyOptions = {
-            host: 'resi.thexyzstore.com',
-            port: 8000,
-            path: `https://isrucamp.com/api/users/users/profile/${username}/`,
-            method: 'GET',
-            headers: {
-                'Proxy-Authorization': 'Basic ' + Buffer.from('0xpuppetxyz:m3r2i6lu-country-US-session-s3ap5lzh-duration-60').toString('base64'),
-                'User-Agent': 'ISRU-Daily-App/1.0'
-            }
-        };
-
-        // Make request through Resi proxy
-        const proxyData = await new Promise((resolve, reject) => {
-            const req = http.request(proxyOptions, (res) => {
+        // Make direct HTTPS request to ISRU API
+        const targetUrl = `https://isrucamp.com/api/users/users/profile/${username}/`;
+        
+        const response = await new Promise((resolve, reject) => {
+            const req = https.get(targetUrl, {
+                headers: {
+                    'User-Agent': 'ISRU-Daily-App/1.0',
+                    'Accept': 'application/json'
+                }
+            }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     if (res.statusCode === 200) {
                         resolve(data);
                     } else {
-                        reject(new Error(`Proxy request failed: ${res.statusCode}`));
+                        reject(new Error(`API request failed: ${res.statusCode}`));
                     }
                 });
             });
@@ -60,11 +54,14 @@ exports.handler = async (event) => {
                 reject(error);
             });
 
-            req.end();
+            req.setTimeout(10000, () => {
+                req.destroy();
+                reject(new Error('Request timeout'));
+            });
         });
 
         // Parse and return the data
-        const userData = JSON.parse(proxyData);
+        const userData = JSON.parse(response);
         
         return {
             statusCode: 200,
@@ -73,7 +70,7 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        console.error('Proxy function error:', error);
+        console.error('Function error:', error);
         
         return {
             statusCode: 500,
